@@ -1,1 +1,3 @@
 python_env/
+data/data_variants/
+models/*.pkl
