@@ -7,6 +7,19 @@ import numpy as np
 import pandas as pd
 import plotly.express as px
 import streamlit as st
+import os
+
+try:
+    from dotenv import load_dotenv
+    load_dotenv()  
+except ImportError:
+    pass 
+
+try:
+    from openai import OpenAI
+    OPENAI_AVAILABLE = True
+except ImportError:
+    OPENAI_AVAILABLE = False
 
 from xai_utils import (
     SHAPExplainer,
@@ -157,6 +170,9 @@ view = st.sidebar.radio(
 
 st.sidebar.markdown("---")
 
+# Configuration IA : récupérer automatiquement la clé depuis .env
+api_key = os.getenv("OPENAI_API_KEY", "")
+
 # ============================================================
 # Load data
 # ============================================================
@@ -272,6 +288,58 @@ def get_lime_explainer(_model, _X_train: pd.DataFrame, _feature_names: list[str]
 
 
 # ============================================================
+# IA Explanation Helper
+# ============================================================
+def explain_with_ai(context: str, graph_data: dict, api_key: str) -> str:
+    """
+    Génère une explication en langage naturel d'un graphique XAI.
+    
+    Args:
+        context: Le type de graphique (SHAP Global, SHAP Local, LIME, etc.)
+        graph_data: Dictionnaire contenant les données du graphique
+        api_key: Clé API OpenAI
+    
+    Returns:
+        Explication textuelle générée par l'IA
+    """
+    try:
+        client = OpenAI(api_key=api_key)
+        
+        # Construction du prompt selon le contexte
+        prompt = f"""
+Vous êtes un expert en détection de fraude financière et en explainability (XAI).
+
+Contexte: {context}
+
+Données du graphique:
+{graph_data}
+
+Votre tâche:
+1. Expliquez de manière claire et accessible ce que montre ce graphique
+2. Identifiez les insights clés pour la détection de fraude
+3. Donnez des recommandations pratiques basées sur ces résultats
+4. Utilisez un langage accessible même pour des non-experts en ML
+
+Répondez en français de manière structurée et concise (200-300 mots).
+"""
+        
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": "Vous êtes un expert en ML et détection de fraude, spécialisé dans l'explication de modèles (XAI)."},
+                {"role": "user", "content": prompt}
+            ],
+            temperature=0.7,
+            max_tokens=600
+        )
+        
+        return response.choices[0].message.content
+    
+    except Exception as e:
+        return f"Erreur lors de la génération de l'explication: {str(e)}"
+
+
+# ============================================================
 # Views
 # ============================================================
 if view == "SHAP Global":
@@ -287,7 +355,7 @@ if view == "SHAP Global":
     
     # Avertissement pour Random Forest
     if is_random_forest:
-        st.info("⚡ **Random Forest détecté** : les valeurs par défaut ont été réduites pour des performances optimales.")
+        st.info("**Random Forest détecté** : les valeurs par défaut ont été réduites pour des performances optimales.")
     
     # Valeurs optimisées : pour RF, limiter encore plus agressivement
     max_samples = st.sidebar.slider(
@@ -342,6 +410,33 @@ if view == "SHAP Global":
 
     st.markdown("#### Top features")
     st.dataframe(imp, use_container_width=True, hide_index=True)
+    
+    # Bouton d'explication IA (toujours visible)
+    if st.button("Expliquer ce graphique avec l'IA", key="ai_shap_global"):
+        if not OPENAI_AVAILABLE:
+            st.error("OpenAI non installé. Installez avec: `pip install openai`")
+        elif not api_key:
+            st.warning("Configurez votre clé API OpenAI dans le fichier .env")
+            st.code("OPENAI_API_KEY=sk-votre-cle-api", language="bash")
+        else:
+            with st.spinner("Génération de l'explication IA..."):
+                graph_data = {
+                    "type": "SHAP Global - Importance des features",
+                    "model": selected_model_file,
+                    "top_features": imp.to_dict('records'),
+                    "num_samples": max_samples,
+                    "total_features": len(feature_names)
+                }
+                
+                explanation = explain_with_ai(
+                    "Analyse SHAP Globale - Importance des features pour la détection de fraude",
+                    graph_data,
+                    api_key
+                )
+                
+                st.markdown("---")
+                st.markdown("### Explication IA")
+                st.markdown(explanation)
 
 elif view == "SHAP Local":
     st.markdown("### SHAP — Analyse locale (transaction)")
@@ -434,6 +529,35 @@ elif view == "SHAP Local":
 
     fig = px.bar(df_local, x="SHAP", y="Feature", orientation="h", title="Contributions SHAP (local)")
     st.plotly_chart(fig, use_container_width=True)
+    
+    # Bouton d'explication IA (toujours visible)
+    if st.button("Expliquer cette transaction avec l'IA", key="ai_shap_local"):
+        if not OPENAI_AVAILABLE:
+            st.error("OpenAI non installé. Installez avec: `pip install openai`")
+        elif not api_key:
+            st.warning("Configurez votre clé API OpenAI dans le fichier .env")
+            st.code("OPENAI_API_KEY=sk-votre-cle-api", language="bash")
+        else:
+            with st.spinner("Analyse de la transaction..."):
+                graph_data = {
+                    "type": "SHAP Local - Explication d'une transaction",
+                    "transaction_id": tx,
+                    "fraud_probability": float(row['fraud_probability']),
+                    "prediction": "FRAUDE" if int(row["prediction"]) == 1 else "Légitime",
+                    "actual": "FRAUDE" if int(row["actual"]) == 1 else "Légitime",
+                    "top_contributions": df_local.to_dict('records'),
+                    "model": selected_model_file
+                }
+                
+                explanation = explain_with_ai(
+                    "Analyse SHAP Locale - Explication des contributions pour une transaction spécifique",
+                    graph_data,
+                    api_key
+                )
+                
+                st.markdown("---")
+                st.markdown("### Explication IA de la transaction")
+                st.markdown(explanation)
 
 elif view == "LIME":
     st.markdown("### LIME — Explication locale")
@@ -482,6 +606,36 @@ elif view == "LIME":
         title="Contributions LIME",
     )
     st.plotly_chart(fig, use_container_width=True)
+    
+    # Bouton d'explication IA (toujours visible)
+    if st.button("Expliquer cette prédiction LIME avec l'IA", key="ai_lime"):
+        if not OPENAI_AVAILABLE:
+            st.error("OpenAI non installé. Installez avec: `pip install openai`")
+        elif not api_key:
+            st.warning("Configurez votre clé API OpenAI dans le fichier .env")
+            st.code("OPENAI_API_KEY=sk-votre-cle-api", language="bash")
+        else:
+            with st.spinner("Analyse LIME en cours..."):
+                graph_data = {
+                    "type": "LIME - Explication locale linéaire",
+                    "transaction_id": tx,
+                    "fraud_probability": float(row['fraud_probability']),
+                    "prediction": "FRAUDE" if int(row["prediction"]) == 1 else "Légitime",
+                    "actual": "FRAUDE" if int(row["actual"]) == 1 else "Légitime",
+                    "lime_contributions": lime_df.to_dict('records'),
+                    "model": selected_model_file,
+                    "num_features": num_features
+                }
+                
+                explanation = explain_with_ai(
+                    "Analyse LIME - Approximation linéaire locale du modèle",
+                    graph_data,
+                    api_key
+                )
+                
+                st.markdown("---")
+                st.markdown("### Explication IA (LIME)")
+                st.markdown(explanation)
 
 else:  # Comparaison
     st.markdown("### Comparaison SHAP vs LIME")
@@ -563,6 +717,37 @@ else:  # Comparaison
         use_container_width=True,
         hide_index=True,
     )
+    
+    # Bouton d'explication IA (toujours visible)
+    if st.button("Expliquer la comparaison SHAP vs LIME avec l'IA", key="ai_comparison"):
+        if not OPENAI_AVAILABLE:
+            st.error("OpenAI non installé. Installez avec: `pip install openai`")
+        elif not api_key:
+            st.warning("Configurez votre clé API OpenAI dans le fichier .env")
+            st.code("OPENAI_API_KEY=sk-votre-cle-api", language="bash")
+        else:
+            with st.spinner("Analyse comparative en cours..."):
+                graph_data = {
+                    "type": "Comparaison SHAP vs LIME",
+                    "transaction_id": tx,
+                    "fraud_probability": float(row['fraud_probability']),
+                    "prediction": "FRAUDE" if int(row["prediction"]) == 1 else "Légitime",
+                    "actual": "FRAUDE" if int(row["actual"]) == 1 else "Légitime",
+                    "correlation": "N/A" if np.isnan(corr) else float(corr),
+                    "top_shap_features": comp_df.sort_values("|SHAP|", ascending=False).head(10).to_dict('records'),
+                    "top_lime_features": comp_df.sort_values("|LIME|", ascending=False).head(10).to_dict('records'),
+                    "model": selected_model_file
+                }
+                
+                explanation = explain_with_ai(
+                    "Comparaison SHAP vs LIME - Convergence des méthodes d'explainability",
+                    graph_data,
+                    api_key
+                )
+                
+                st.markdown("---")
+                st.markdown("### Explication IA de la comparaison")
+                st.markdown(explanation)
 
 st.markdown("---")
 st.caption("Projet — Financial Fraud Detection • Streamlit • SHAP • LIME")

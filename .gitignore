@@ -2,3 +2,29 @@ python_env/
 data/data_variants/
 models/*.pkl
 Othermodels/
+
+# Fichiers d'environnement (contient les clés API)
+.env
+
+# Cache Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# Environnements virtuels
+venv/
+ENV/
+env/
+streamlit_env/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Logs
+*.log
