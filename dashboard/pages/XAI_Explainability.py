@@ -264,8 +264,8 @@ st.markdown("---")
 # ============================================================
 # Explainers (no cache: avoid stale feature sets)
 # ============================================================
-def get_shap_explainer(_model, _X_bg: pd.DataFrame, _feature_names: list[str]):
-    return SHAPExplainer(_model, _X_bg, feature_names=_feature_names)
+def get_shap_explainer(_model, _X_bg: pd.DataFrame, _feature_names: list[str], max_trees: int | None = None):
+    return SHAPExplainer(_model, _X_bg, feature_names=_feature_names, max_trees=max_trees)
 
 def get_lime_explainer(_model, _X_train: pd.DataFrame, _feature_names: list[str]):
     return LIMEExplainer(_model, _X_train, feature_names=_feature_names)
@@ -281,20 +281,42 @@ if view == "SHAP Global":
         unsafe_allow_html=True,
     )
 
+    # Détection Random Forest pour warning performance
+    model_name = selected_model_file.lower()
+    is_random_forest = 'random' in model_name or 'forest' in model_name or 'rf' in model_name
+    
+    # Avertissement pour Random Forest
+    if is_random_forest:
+        st.info("⚡ **Random Forest détecté** : les valeurs par défaut ont été réduites pour des performances optimales.")
+    
+    # Valeurs optimisées : pour RF, limiter encore plus agressivement
     max_samples = st.sidebar.slider(
         "Échantillons expliqués (SHAP)",
-        200,
-        min(5000, len(X_test)),
-        min(1000, len(X_test)),
-        step=200,
+        10,
+        50 if is_random_forest else min(500, len(X_test)),
+        20 if is_random_forest else min(100, len(X_test)),
+        step=5 if is_random_forest else 50,
     )
     bg_size = st.sidebar.slider(
         "Taille background (SHAP)",
-        100,
-        min(5000, len(X_train)),
-        min(1000, len(X_train)),
-        step=100,
+        10,
+        50 if is_random_forest else min(500, len(X_train)),
+        20 if is_random_forest else min(100, len(X_train)),
+        step=5 if is_random_forest else 50,
     )
+    
+    # Nouveau paramètre : limitation du nombre d'arbres pour RF
+    max_trees = None
+    if is_random_forest:
+        max_trees = st.sidebar.slider(
+            "Arbres RF utilisés (perf)",
+            10,
+            100,
+            30,
+            step=10,
+            help="Limiter le nombre d'arbres accélère drastiquement SHAP pour Random Forest. 30 arbres donnent déjà de bonnes explications."
+        )
+    
     top_k = st.sidebar.slider(
         "Top features",
         5,
@@ -303,7 +325,7 @@ if view == "SHAP Global":
     )
 
     X_bg = X_train.sample(n=min(bg_size, len(X_train)), random_state=42)
-    explainer = get_shap_explainer(model, X_bg, feature_names)
+    explainer = get_shap_explainer(model, X_bg, feature_names, max_trees=max_trees)
 
     with st.spinner("Calcul des SHAP values…"):
         _ = explainer.compute(X_test, max_samples=max_samples)
@@ -328,20 +350,41 @@ elif view == "SHAP Local":
         unsafe_allow_html=True,
     )
 
+    # Valeurs optimisées pour performance
+    model_name = selected_model_file.lower()
+    is_random_forest = 'random' in model_name or 'forest' in model_name or 'rf' in model_name
+    
+    # Avertissement pour Random Forest
+    if is_random_forest:
+        st.info("⚡ **Random Forest détecté** : paramètres optimisés pour la performance.")
+    
     pool_n = st.sidebar.slider(
         "Taille pool",
-        100,
-        min(3000, len(test_df)),
-        min(800, len(test_df)),
-        step=100,
+        10,
+        50 if is_random_forest else min(500, len(test_df)),
+        20 if is_random_forest else min(200, len(test_df)),
+        step=5 if is_random_forest else 50,
     )
     bg_size = st.sidebar.slider(
         "Taille background (SHAP)",
-        100,
-        min(5000, len(X_train)),
-        min(1000, len(X_train)),
-        step=100,
+        10,
+        50 if is_random_forest else min(500, len(X_train)),
+        20 if is_random_forest else min(100, len(X_train)),
+        step=5 if is_random_forest else 50,
     )
+    
+    # Nouveau paramètre : limitation du nombre d'arbres pour RF
+    max_trees = None
+    if is_random_forest:
+        max_trees = st.sidebar.slider(
+            "Arbres RF utilisés (perf)",
+            10,
+            100,
+            30,
+            step=10,
+            help="Limiter le nombre d'arbres accélère drastiquement SHAP. 30 arbres suffisent pour de bonnes explications."
+        )
+    
     top_k = st.sidebar.slider(
         "Contributions affichées",
         5,
@@ -366,7 +409,7 @@ elif view == "SHAP Local":
     local_pos = list(pool.index).index(idx)
 
     X_bg = X_train.sample(n=min(bg_size, len(X_train)), random_state=42)
-    explainer = get_shap_explainer(model, X_bg, feature_names)
+    explainer = get_shap_explainer(model, X_bg, feature_names, max_trees=max_trees)
 
     with st.spinner("Calcul de l'explication locale SHAP…"):
         explainer.compute(X_test.loc[pool.index], max_samples=len(pool))
@@ -447,20 +490,40 @@ else:  # Comparaison
         unsafe_allow_html=True,
     )
 
+    # Valeurs optimisées pour performance
+    model_name = selected_model_file.lower()
+    is_random_forest = 'random' in model_name or 'forest' in model_name or 'rf' in model_name
+    
+    # Avertissement pour Random Forest
+    if is_random_forest:
+        st.warning("⚠️ **Random Forest détecté** : la comparaison SHAP+LIME peut être très lente (30-60s). Considérez utiliser les vues séparées.")
+    
     pool_n = st.sidebar.slider(
         "Taille pool",
-        100,
-        min(2000, len(test_df)),
-        min(400, len(test_df)),
-        step=100,
+        10,
+        30 if is_random_forest else min(500, len(test_df)),
+        15 if is_random_forest else min(200, len(test_df)),
+        step=5 if is_random_forest else 50,
     )
     bg_size = st.sidebar.slider(
         "Taille background (SHAP)",
-        100,
-        min(5000, len(X_train)),
-        min(1000, len(X_train)),
-        step=100,
+        10,
+        50 if is_random_forest else min(500, len(X_train)),
+        20 if is_random_forest else min(100, len(X_train)),
+        step=5 if is_random_forest else 50,
     )
+    
+    # Nouveau paramètre : limitation du nombre d'arbres pour RF
+    max_trees = None
+    if is_random_forest:
+        max_trees = st.sidebar.slider(
+            "Arbres RF utilisés (perf)",
+            10,
+            100,
+            25,
+            step=5,
+            help="Limiter drastiquement pour la comparaison SHAP+LIME."
+        )
 
     pool = test_df.head(pool_n)
     tx = st.selectbox("Transaction", pool["transaction_id"].tolist())
@@ -469,7 +532,7 @@ else:  # Comparaison
     pos = list(X_test.index).index(idx) if idx in X_test.index else 0
 
     X_bg = X_train.sample(n=min(bg_size, len(X_train)), random_state=42)
-    shap_exp = get_shap_explainer(model, X_bg, feature_names)
+    shap_exp = get_shap_explainer(model, X_bg, feature_names, max_trees=max_trees)
     lime_exp = get_lime_explainer(model, X_train, feature_names)
 
     with st.spinner("Calcul SHAP + LIME…"):

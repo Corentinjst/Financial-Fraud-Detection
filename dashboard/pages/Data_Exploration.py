@@ -249,7 +249,7 @@ else:
     with left:
         selected_var = st.selectbox("Variable", numeric_cols, index=0)
         chart_type = st.radio("Graphique", ["Histogramme", "Boxplot"], index=0)
-        color_by_target = st.checkbox("Colorer par cible", value=True)
+        color_by_target = st.checkbox("Colorer par cible", value=True, key="color_by_target_distribution")
 
     with right:
         sample_df = df_filtered.sample(min(sample_size, len(df_filtered))) if len(df_filtered) > sample_size else df_filtered
@@ -282,7 +282,7 @@ else:
     with c1:
         cat_var = st.selectbox("Variable catégorielle", cat_cols, index=0)
         topn = st.slider("Top catégories", 5, 30, 10)
-        show_target_rate = st.checkbox("Afficher taux de fraude par catégorie", value=True)
+        show_target_rate = st.checkbox("Afficher taux de fraude par catégorie", value=True, key="show_target_rate_categorical")
 
     with c2:
         counts = df[cat_var].astype(str).value_counts().head(topn)
@@ -369,7 +369,7 @@ if len(num_cols) >= 2:
     with c2:
         y_var = st.selectbox("Variable Y", num_cols, index=1 if len(num_cols) > 1 else 0)
     with c3:
-        color_target = st.checkbox("Colorer par cible", value=True)
+        color_target = st.checkbox("Colorer par cible", value=True, key="color_target_scatter")
 
     sample_df = df_filtered.sample(min(5000, len(df_filtered)))
 

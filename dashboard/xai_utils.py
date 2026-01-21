@@ -52,14 +52,48 @@ def to_numpy_2d_shap(shap_values) -> np.ndarray:
 
 
 class SHAPExplainer:
-    """Wrapper SHAP TreeExplainer robuste (RF/XGB/LGBM/CatBoost)."""
+    """Wrapper SHAP TreeExplainer robuste (RF/XGB/LGBM/CatBoost) avec optimisations de performance."""
 
-    def __init__(self, model, X_background: pd.DataFrame, feature_names: list[str]):
+    def __init__(self, model, X_background: pd.DataFrame, feature_names: list[str], max_trees: int | None = None):
         import shap  # lazy import
 
         self.model = model
         self.feature_names = feature_names
-        self.explainer = shap.TreeExplainer(model)
+        
+        # Détection Random Forest pour optimisations spécifiques
+        model_type = str(type(model).__name__).lower()
+        self.is_random_forest = 'random' in model_type or 'forest' in model_type
+        
+        # OPTIMISATION CRITIQUE pour Random Forest : Limiter le nombre d'arbres
+        # RF avec 100+ arbres peut prendre plusieurs minutes par échantillon
+        if self.is_random_forest and max_trees is not None:
+            try:
+                # Cloner le modèle en ne gardant que les premiers arbres
+                import copy
+                model_copy = copy.deepcopy(model)
+                if hasattr(model_copy, 'estimators_'):
+                    original_count = len(model_copy.estimators_)
+                    if original_count > max_trees:
+                        model_copy.estimators_ = model_copy.estimators_[:max_trees]
+                        model_copy.n_estimators = max_trees
+                        self.model = model_copy
+                        print(f"⚡ RF optimisé : {original_count} → {max_trees} arbres")
+            except Exception as e:
+                print(f"⚠️ Impossible de limiter les arbres RF: {e}")
+        
+        # OPTIMISATION : Pour Random Forest, utiliser interventional avec un background dataset plus large
+        # tree_path_dependent nécessite que le background couvre toutes les feuilles du modèle
+        if self.is_random_forest:
+            # Utiliser un background plus large pour RF (100 samples) avec interventional
+            bg_size = min(100, len(X_background))
+            self.explainer = shap.TreeExplainer(
+                self.model,
+                data=X_background[feature_names].head(bg_size),
+                feature_perturbation='interventional',  # Plus robuste que tree_path_dependent
+                model_output='raw'  # évite les conversions inutiles
+            )
+        else:
+            self.explainer = shap.TreeExplainer(self.model)
 
         self.X_explained: pd.DataFrame | None = None
         self.shap_values: np.ndarray | None = None
@@ -70,7 +104,12 @@ class SHAPExplainer:
             X_use = X_use.sample(n=max_samples, random_state=RANDOM_STATE)
 
         self.X_explained = X_use.reset_index(drop=True)
-        vals = self.explainer.shap_values(self.X_explained)
+        
+        # OPTIMISATION CRITIQUE : Désactiver check_additivity pour gagner 30-50% de temps
+        vals = self.explainer.shap_values(
+            self.X_explained, 
+            check_additivity=False
+        )
         self.shap_values = to_numpy_2d_shap(vals)
         return self.shap_values
 

@@ -207,7 +207,7 @@ if not model_files:
 
 selected_model_file = st.sidebar.selectbox("Modèle (détail)", model_files)
 
-view_mode = st.sidebar.radio("Mode d'affichage", ["Comparaison globale", "Détail d'un modèle"], index=0)
+view_mode = st.sidebar.radio("Mode d'affichage", ["Comparaison globale", "Détail d'un modèle"], index=1)
 
 # ============================================================
 # Prepare X_test / y_test + base feature alignment train/test
