@@ -307,21 +307,21 @@ def explain_with_ai(context: str, graph_data: dict, api_key: str) -> str:
         
         # Construction du prompt selon le contexte
         prompt = f"""
-Vous êtes un expert en détection de fraude financière et en explainability (XAI).
+        Vous êtes un expert en détection de fraude financière et en explainability (XAI).
 
-Contexte: {context}
+        Contexte: {context}
 
-Données du graphique:
-{graph_data}
+        Données du graphique:
+        {graph_data}
 
-Votre tâche:
-1. Expliquez de manière claire et accessible ce que montre ce graphique
-2. Identifiez les insights clés pour la détection de fraude
-3. Donnez des recommandations pratiques basées sur ces résultats
-4. Utilisez un langage accessible même pour des non-experts en ML
+        Votre tâche:
+        1. Expliquez de manière claire et accessible ce que montre ce graphique
+        2. Identifiez les insights clés pour la détection de fraude
+        3. Donnez des recommandations pratiques basées sur ces résultats
+        4. Utilisez un langage accessible même pour des non-experts en ML
 
-Répondez en français de manière structurée et concise (200-300 mots).
-"""
+        Répondez en français de manière structurée et concise (200-300 mots).
+        """
         
         response = client.chat.completions.create(
             model="gpt-4o-mini",
@@ -411,7 +411,7 @@ if view == "SHAP Global":
     st.markdown("#### Top features")
     st.dataframe(imp, use_container_width=True, hide_index=True)
     
-    # Bouton d'explication IA (toujours visible)
+    # Bouton d'explication IA 
     if st.button("Expliquer ce graphique avec l'IA", key="ai_shap_global"):
         if not OPENAI_AVAILABLE:
             st.error("OpenAI non installé. Installez avec: `pip install openai`")
@@ -530,7 +530,7 @@ elif view == "SHAP Local":
     fig = px.bar(df_local, x="SHAP", y="Feature", orientation="h", title="Contributions SHAP (local)")
     st.plotly_chart(fig, use_container_width=True)
     
-    # Bouton d'explication IA (toujours visible)
+    # Bouton d'explication IA 
     if st.button("Expliquer cette transaction avec l'IA", key="ai_shap_local"):
         if not OPENAI_AVAILABLE:
             st.error("OpenAI non installé. Installez avec: `pip install openai`")
@@ -607,7 +607,7 @@ elif view == "LIME":
     )
     st.plotly_chart(fig, use_container_width=True)
     
-    # Bouton d'explication IA (toujours visible)
+    # Bouton d'explication IA 
     if st.button("Expliquer cette prédiction LIME avec l'IA", key="ai_lime"):
         if not OPENAI_AVAILABLE:
             st.error("OpenAI non installé. Installez avec: `pip install openai`")
@@ -718,7 +718,7 @@ else:  # Comparaison
         hide_index=True,
     )
     
-    # Bouton d'explication IA (toujours visible)
+    # Bouton d'explication IA 
     if st.button("Expliquer la comparaison SHAP vs LIME avec l'IA", key="ai_comparison"):
         if not OPENAI_AVAILABLE:
             st.error("OpenAI non installé. Installez avec: `pip install openai`")
